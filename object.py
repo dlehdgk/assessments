@@ -118,4 +118,3 @@ class Test:
             )
 
         return self
-
