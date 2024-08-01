@@ -127,5 +127,5 @@ class Test:
 
 
 # Example usage
-p3_mock = Test("example.csv")
-print(p3_mock.marks(norm=False))
+# p3_mock = Test("example.csv")
+# print(p3_mock.marks(norm=False))
