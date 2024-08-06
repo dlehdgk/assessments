@@ -49,6 +49,9 @@ class Test:
         question_cols = [col for col in self.mark_table.columns if col.startswith("Q")]
 
         if self.__parts:
+            # Initialize a dictionary to store the sums for each question
+            question_sums = {q_num: 0 for q_num in self.__question_nos}
+
             for q_num in self.__question_nos:
                 question_parts = [
                     col for col in self.mark_table.columns if col.startswith(q_num)
@@ -56,9 +59,10 @@ class Test:
                 self.mark_table[q_num + "_Total"] = self.mark_table[question_parts].sum(
                     axis=1
                 )
-            total_cols = [
-                col for col in self.mark_table.columns if col.endswith("_Total")
-            ]
+                question_sums[q_num] = self.mark_table[q_num + "_Total"]
+
+            # Add a new column with total marks for each student
+            total_cols = [q + "_Total" for q in self.__question_nos]
             self.mark_table["Total"] = self.mark_table[total_cols].sum(axis=1)
         else:
             self.__question_nos = question_cols
@@ -75,10 +79,10 @@ class Test:
             total = self.add_total_mark().mark_table
         return total
 
-    def marks(self, norm=False):
+    def marks(self, norm=False, to_one=False):
         df = self.mark_table
         if norm:
-            df = self.normalise_marks().norm_table
+            df = self.normalise_marks(to_one=to_one).norm_table
         if self.__parts:
             df_melted = df.melt(
                 id_vars=["Name"], var_name="Question_Part", value_name="Mark"
@@ -95,19 +99,26 @@ class Test:
             marks_df = df_melted[["Name", "Question", "Mark"]]
         return marks_df
 
-    def normalise_marks(self):
+    def normalise_marks(self, to_one=False):
         self.norm_table = self.mark_table.copy()
         for q_num in self.__question_nos:
             question_parts = [
                 col for col in self.norm_table.columns if col.startswith(q_num)
             ]
-            for part in question_parts:
-                self.norm_table[part] = (
-                    self.norm_table[part]
-                    / self.available_marks[self.available_marks["Question"] == part][
-                        "Marks_Available"
-                    ].values[0]
-                )
+            if to_one:
+                total_max_marks = self.available_marks[
+                    self.available_marks["Question"] == q_num + "_Total"
+                ]["Marks_Available"].values[0]
+                for part in question_parts:
+                    self.norm_table[part] = self.norm_table[part] / total_max_marks
+            else:
+                for part in question_parts:
+                    self.norm_table[part] = (
+                        self.norm_table[part]
+                        / self.available_marks[
+                            self.available_marks["Question"] == part
+                        ]["Marks_Available"].values[0]
+                    )
             total_column_name = q_num + "_Total"
             if total_column_name in self.norm_table.columns:
                 self.norm_table[total_column_name] = (
@@ -118,7 +129,7 @@ class Test:
                 )
         if "Total" in self.norm_table.columns:
             self.norm_table["Total"] = (
-                self.mark_table["Total"]
+                self.norm_table["Total"]
                 / self.available_marks[self.available_marks["Question"] == "Total"][
                     "Marks_Available"
                 ].values[0]
@@ -126,6 +137,18 @@ class Test:
         return self
 
 
-# Example usage
-# p3_mock = Test("example.csv")
-# print(p3_mock.marks(norm=False))
+# Create an instance of Test
+p3_mock = Test(file_path)
+p3_mock.add_total_mark()
+df_total_marks = p3_mock.get_total_marks()
+
+# Inspect the total marks DataFrame
+print(df_total_marks)
+
+# Plotting the histogram for total marks
+plt.figure(figsize=(12, 8))
+plt.hist(df_total_marks["Total"], bins=10, edgecolor="black")
+plt.title("Histogram of Total Marks")
+plt.xlabel("Total Marks")
+plt.ylabel("Frequency")
+plt.show()
