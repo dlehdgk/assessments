@@ -26,13 +26,16 @@ class Test:
 
         # Calculate total marks available for each question part and overall total
         total_marks = {}
+        # print(self.__question_nos)
         for q_num in self.__question_nos:
             question_parts = [
                 col for col in self.__total.columns if col.startswith(q_num)
             ]
+            # print(question_parts)
             self.__total.loc[:, q_num + "_Total"] = (
                 self.__total[question_parts].sum(axis=1).sum()
             )
+            # print(self.__total.shape)
             for part in question_parts:
                 total_marks[part] = self.__total[part].values[0]
             total_marks[q_num + "_Total"] = self.__total[q_num + "_Total"].values[0]
@@ -61,6 +64,7 @@ class Test:
                 )
                 question_sums[q_num] = self.mark_table[q_num + "_Total"]
 
+            # print(question_sums)
             # Add a new column with total marks for each student
             total_cols = [q + "_Total" for q in self.__question_nos]
             self.mark_table["Total"] = self.mark_table[total_cols].sum(axis=1)
@@ -138,17 +142,8 @@ class Test:
 
 
 # Create an instance of Test
-p3_mock = Test(file_path)
-p3_mock.add_total_mark()
-df_total_marks = p3_mock.get_total_marks()
+# p3_mock = Test("example.csv")
+# df_total_marks = p3_mock.get_total_marks()
 
 # Inspect the total marks DataFrame
-print(df_total_marks)
-
-# Plotting the histogram for total marks
-plt.figure(figsize=(12, 8))
-plt.hist(df_total_marks["Total"], bins=10, edgecolor="black")
-plt.title("Histogram of Total Marks")
-plt.xlabel("Total Marks")
-plt.ylabel("Frequency")
-plt.show()
+# print(df_total_marks)
