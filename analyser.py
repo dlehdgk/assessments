@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 class Test:
@@ -14,6 +16,8 @@ class Test:
 
         # Initialize additional dataframes and variables
         self.norm_table = None
+        self.total_marks_table = None  # New dataframe to store total marks
+        self.norm_total = None  # New dataframe to store normalized total marks
         question_cols = [col for col in self.mark_table.columns if col.startswith("Q")]
 
         # Determine question numbers based on the presence of parts
@@ -26,19 +30,16 @@ class Test:
 
         # Calculate total marks available for each question part and overall total
         total_marks = {}
-        # print(self.__question_nos)
         for q_num in self.__question_nos:
             question_parts = [
                 col for col in self.__total.columns if col.startswith(q_num)
             ]
-            # print(question_parts)
-            self.__total.loc[:, q_num + "_Total"] = (
-                self.__total[question_parts].sum(axis=1).sum()
-            )
-            # print(self.__total.shape)
+            q_total = self.__total[question_parts].sum(axis=1).sum()
+            total_marks[q_num + "_Total"] = q_total
+            self.__total[q_num + "_Total"] = q_total
+
             for part in question_parts:
                 total_marks[part] = self.__total[part].values[0]
-            total_marks[q_num + "_Total"] = self.__total[q_num + "_Total"].values[0]
 
         total_marks["Total"] = self.__total.filter(like="_Total").sum(axis=1).values[0]
 
@@ -47,41 +48,54 @@ class Test:
             list(total_marks.items()), columns=["Question", "Marks_Available"]
         )
 
-    def add_total_mark(self):
-        # Adding total marks per question and overall total to mark_table
-        question_cols = [col for col in self.mark_table.columns if col.startswith("Q")]
+        # Initialize total_marks_table with total marks
+        self._initialize_total_marks_table()
 
+        # Normalize the total marks table
+        self._initialize_norm_total()
+
+    def _initialize_total_marks_table(self):
         if self.__parts:
-            # Initialize a dictionary to store the sums for each question
-            question_sums = {q_num: 0 for q_num in self.__question_nos}
-
+            columns = ["Name"] + [q + "_Total" for q in self.__question_nos] + ["Total"]
+            self.total_marks_table = self.mark_table.copy()
             for q_num in self.__question_nos:
                 question_parts = [
                     col for col in self.mark_table.columns if col.startswith(q_num)
                 ]
-                self.mark_table[q_num + "_Total"] = self.mark_table[question_parts].sum(
-                    axis=1
-                )
-                question_sums[q_num] = self.mark_table[q_num + "_Total"]
+                self.total_marks_table[q_num + "_Total"] = self.mark_table[
+                    question_parts
+                ].sum(axis=1)
 
-            # print(question_sums)
             # Add a new column with total marks for each student
             total_cols = [q + "_Total" for q in self.__question_nos]
-            self.mark_table["Total"] = self.mark_table[total_cols].sum(axis=1)
+            self.total_marks_table["Total"] = self.total_marks_table[total_cols].sum(
+                axis=1
+            )
+            self.total_marks_table = self.total_marks_table.loc[:, columns]
         else:
-            self.__question_nos = question_cols
-            self.mark_table["Total"] = self.mark_table[self.__question_nos].sum(axis=1)
+            self.total_marks_table = self.mark_table.copy()
+            self.total_marks_table["Total"] = self.total_marks_table[
+                self.__question_nos
+            ].sum(axis=1)
 
-        return self
+    def _initialize_norm_total(self):
+        # Create a normalized version of the total_marks_table
+        self.norm_total = self.total_marks_table.copy()
 
-    def get_total_marks(self):
-        if self.__parts:
-            columns = ["Name"] + [q + "_Total" for q in self.__question_nos] + ["Total"]
-            mt = self.add_total_mark().mark_table
-            total = mt.loc[:, columns]
-        else:
-            total = self.add_total_mark().mark_table
-        return total
+        for q_num in self.__question_nos:
+            total_column = q_num + "_Total"
+            max_marks = self.available_marks[
+                self.available_marks["Question"] == total_column
+            ]["Marks_Available"].values[0]
+
+            # Normalize each question total
+            self.norm_total[total_column] = self.norm_total[total_column] / max_marks
+
+        # Normalize the overall total
+        total_max_marks = self.available_marks[
+            self.available_marks["Question"] == "Total"
+        ]["Marks_Available"].values[0]
+        self.norm_total["Total"] = self.norm_total["Total"] / total_max_marks
 
     def marks(self, norm=False, to_one=False):
         df = self.mark_table
@@ -140,10 +154,48 @@ class Test:
             )
         return self
 
+    def total_marks_analysis(self, file_path):
+        # Create a figure with subplots
+        fig, axes = plt.subplots(3, 1, figsize=(14, 18))
+        plt.subplots_adjust(hspace=0.5)
+
+        # Plot 1: Heatmap of Student Scores
+        heatmap_data = self.mark_table.set_index("Name")
+        sns.heatmap(
+            heatmap_data, annot=True, cmap="coolwarm", linewidths=0.5, ax=axes[0]
+        )
+        axes[0].set_title("Heatmap of Student Scores")
+
+        # Plot 2: Annotated Histogram of Total Marks
+        hist = sns.histplot(data=self.norm_total, x="Total", kde=True, ax=axes[1])
+        mean_total = np.mean(self.norm_total["Total"])
+        std_total = np.std(self.norm_total["Total"])
+        data = f"mean: {mean_total:.3f}, standard deviation: {std_total:.3f}"
+        axes[1].set_title("Distribution of Normalized Total Marks")
+        axes[1].annotate(data, xy=(0.6, 0.8), xycoords="axes fraction")
+
+        # Plot 3: Stacked Bar Plot of Average Normalized Scores
+        df_avg = (
+            self.marks(norm=True, to_one=True)
+            .groupby(["Question", "Part"])["Mark"]
+            .mean()
+            .unstack()
+            .fillna(0)
+        )
+        df_avg.plot(kind="bar", stacked=True, ax=axes[2])
+        axes[2].set_title("Average Normalized Scores for Each Question Part")
+        axes[2].set_ylabel("Average Normalized Mark")
+        axes[2].set_xlabel("Questions")
+        axes[2].legend(title="Part", bbox_to_anchor=(1.05, 1), loc="upper left")
+
+        # Save the figure to a file
+        plt.savefig(file_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        return self
+
 
 # Create an instance of Test
-# p3_mock = Test("example.csv")
-# df_total_marks = p3_mock.get_total_marks()
-
+p3_mock = Test("example.csv")
+p3_mock.total_marks_analysis("Output/test_analyser.png")
 # Inspect the total marks DataFrame
-# print(df_total_marks)
+# print(p3_mock.normalise_marks(to_one=False).norm_table)
