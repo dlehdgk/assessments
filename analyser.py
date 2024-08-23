@@ -192,10 +192,3 @@ class Test:
         plt.savefig(file_path, dpi=300, bbox_inches="tight")
         plt.close(fig)
         return self
-
-
-# Create an instance of Test
-# p3_mock = Test("example.csv")
-# p3_mock.total_marks_analysis("Output/test_analyser.png")
-# Inspect the total marks DataFrame
-# print(p3_mock.normalise_marks(to_one=False).norm_table)
